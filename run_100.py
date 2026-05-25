@@ -3,26 +3,10 @@ run_100.py
 100 个测试场的完整实验流程
 
 四方法对比（统一序贯 ES-MDA 协议）：
-  - active : Look-ahead（自适应；look-ahead 虚拟同化）
+  - active : Active Learning（自适应；look-ahead 虚拟同化）
   - greedy : MaxVar 贪心（自适应；当前后验方差最大处加井）
   - random : 随机选井（非自适应；10 次 trial 取 mean ± std）
   - lhs    : Latin Hypercube 空间填充（非自适应；10 次 trial 取 mean ± std）
-
-协议一致性
-----------
-  D1 同化协议   : sequential ES-MDA（所有方法共用 shared_utils.run_esmda）
-  D2 先验集合   : 同一 SEED、同一 N_ENSEMBLE，跨方法严格一致
-  D3 起跑线     : 前 3 口初始井固定 seed = config.SEED，跨方法/跨样本共享
-  D4 选井准则   : 四种方法在此唯一不同 —— 任何性能差异都可干净归因到准则本身
-
-多 trial 设计
--------------
-  Random 与 LHS 都是非自适应方法（井位与后验无关），单次运行的 spread
-  无法刻画方法本身的性质，因此各跑 NUM_RANDOM_TRIALS (=10) 次：
-    - random : 用 np.random.choice 抽签，seed = SEED + 1000 + sample_idx*100 + trial
-    - lhs    : 用 LHS 拉丁超立方设计，seed = SEED + 3000 + sample_idx*100 + trial
-  两者在 trial 维度上的统计口径完全一致（mean ± std），可干净对照
-  "空间填充设计 vs 均匀随机抽样"的差异。
 
 输出
 ----
@@ -48,9 +32,9 @@ class TestConfig(su.BaseConfig):
 
 
 # ==========================================
-# Look-ahead
+# Active Learning
 # ==========================================
-def run_look_ahead(sample_idx, K_true, H_true, C_true, k_train_data,
+def run_active_learning(sample_idx, K_true, H_true, C_true, k_train_data,
                         vae, fno_kh, fno_kc, config):
     wells   = su.init_wells_lhs(config.INITIAL_WELLS, config.GRID_SIZE, config.SEED)
     z_prior = su.generate_prior(vae, k_train_data, config.N_ENSEMBLE, config, config.SEED)
@@ -383,7 +367,7 @@ def main(methods=('active', 'greedy', 'random', 'lhs'),
     参数
     ----
     methods : tuple/list of str
-        要运行的方法子集，可选 'active' / 'greedy' / 'random' / 'lhs'；其中 'active' 为历史内部键，对外对应 Look-ahead。
+        要运行的方法子集，可选 'active' / 'greedy' / 'random' / 'lhs'。
         默认全部四种。
     start, end : int
         样本索引范围，半开区间 [start, end)。默认 0~100。
@@ -426,20 +410,20 @@ def main(methods=('active', 'greedy', 'random', 'lhs'),
         sk = f'sample_{sample_idx:03d}'
         progress['completed_samples'].setdefault(sk, {})
 
-        # ---- Look-ahead ----
+        # ---- Active ----
         if 'active' in methods:
             if resume and check_sample_done(config.OUTPUT_ROOT, sample_idx, 'active'):
-                print(f"  [Look-ahead] already done, skipping.")
+                print(f"  [Active] already done, skipping.")
             else:
-                print(f"\n  --- Look-ahead (sample {sample_idx}) ---")
+                print(f"\n  --- Active Learning (sample {sample_idx}) ---")
                 t0 = time.time()
                 su.set_seed(config.SEED)
-                result  = run_look_ahead(sample_idx, K_true, H_true, C_true,
+                result  = run_active_learning(sample_idx, K_true, H_true, C_true,
                                               k_train_data, vae, fno_kh, fno_kc, config)
                 elapsed = time.time() - t0
                 save_sample_result(config.OUTPUT_ROOT, sample_idx, 'active', result)
                 final = result['history'][-1]
-                print(f"  [Look-ahead] {elapsed/60:.1f} min | "
+                print(f"  [Active] {elapsed/60:.1f} min | "
                       f"K_R2={final['K_r2']:.4f}  C_R2={final['C_r2']:.4f}  "
                       f"mean_std={final['C_mean_std']:.4f} "
                       f"(量程{final['C_mean_std']*100:.1f}%)")
@@ -570,7 +554,7 @@ def main(methods=('active', 'greedy', 'random', 'lhs'),
 # ==========================================
 # 修改以下变量来控制运行行为：
 #   METHODS   : 要跑的方法子集。已有结果会被自动跳过（RESUME=True）。
-#               默认 ['active', 'greedy', 'random', 'lhs'] —— 四方法全跑；'active' 对外显示为 Look-ahead
+#               默认 ['active', 'greedy', 'random', 'lhs'] —— 四方法全跑
 #   START_IDX, END_IDX : 样本范围（半开区间），默认 0~100
 #   RESUME    : 断点续算开关。
 #               -- True  : 跳过已存在的 npz（不会覆盖之前的结果）
