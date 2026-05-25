@@ -8,7 +8,7 @@ The internal file name "active" is retained for compatibility with the original 
 
 Download the required files from:
 
-https://drive.google.com/file/d/104rElvPt-kiw1lm_xVRoNQmQ8MfmUxjf/view?usp=sharing
+https://drive.google.com/file/d/1BBjbfqQv13MZeY1xy2t6oOWb2tXCdEUj/view?usp=sharing
 
 After downloading and extracting the files, place them in the corresponding folders as follows:
 
@@ -154,27 +154,7 @@ test_selected_results/
 test_100_results/paper_figures_output/
 
 
-10. Suggested running order
-
-For a full reproduction from scratch:
-
-1. python train_vae.py
-2. python train_f1.py
-3. python train_f2.py
-4. python evaluate_surrogate.py
-5. python run_es_mda.py
-6. python evaluate_es_mda.py
-7. python run_100.py
-8. python evaluate_unified.py
-
-Optional:
-
-9. python saturation_curve.py
-10. python run_selected_samples.py
-11. python figure_plot.py
-
-
-11. Notes
+10. Notes
 
 All scripts should be run from the repository root directory.
 
