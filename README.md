@@ -10,29 +10,29 @@ https://drive.google.com/file/d/1BBjbfqQv13MZeY1xy2t6oOWb2tXCdEUj/view?usp=shari
 
 After downloading and extracting the files, place them in the corresponding folders as follows:
 
-[ data/
+1.data/
     DataK_6000_51_51.mat
     DataH_6000_5_51_51.mat
     DataC_6000_5_51_51_Original.mat
 
-data/test/
+2.data/test/
     DataK_test_100_51_51.mat
     DataH_test_100_5_51_51.mat
     DataC_100_5_51_51_Original.mat
 
-test_synthetic_data/
+3.test_synthetic_data/
     synthetic_test_100.npz
 
-vae_results/
+4.vae_results/
     best_vae.pth
 
-fno_kh_results/
+5.fno_kh_results/
     best_fno_kh.pth
     normalization_params.npz
 
-fno_kc_results/
+6.fno_kc_results/
     best_fno_kc.pth
-    normalization_params.npz]
+    normalization_params.npz
 
 
 ## 2. Install required packages
