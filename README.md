@@ -1,13 +1,10 @@
 # A-Surrogate-Driven-Progressive-Look-Ahead-Framework
 This repository provides the code used for the surrogate-model-assisted ES-MDA and Look-ahead monitoring well placement experiments.
-
 The internal file name "active" is retained for compatibility with the original result files, but it corresponds to the Look-ahead strategy in the paper.
 
-
-1. Download input data and pretrained model files
+# 1. Download input data and pretrained model files
 
 Download the required files from:
-
 https://drive.google.com/file/d/1BBjbfqQv13MZeY1xy2t6oOWb2tXCdEUj/view?usp=sharing
 
 After downloading and extracting the files, place them in the corresponding folders as follows:
@@ -37,7 +34,7 @@ fno_kc_results/
     normalization_params.npz
 
 
-2. Install required packages
+# 2. Install required packages
 
 Install the required Python packages using:
 
@@ -46,7 +43,7 @@ pip install -r requirements.txt
 Please make sure that the PyTorch version is compatible with your local CUDA environment.
 
 
-3. Train the surrogate models
+# 3. Train the surrogate models
 
 Run the following scripts from the repository root directory:
 
