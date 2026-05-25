@@ -2,17 +2,6 @@
 evaluate_unified.py
 对 run_100.py 生成的多样本结果进行统一评估（性能 + 空间 + 成本）。
 
-由原 evaluate_100.py 与 evaluate_spatial_stats.py 合并而来，新增：
-  - LHS baseline 支持（4 方法对比：look-ahead / greedy / random / lhs（内部文件键仍为 active / greedy / random / lhs））
-  - 空间分布统计（ANN / Clark-Evans R / Coverage / Boundary / Plume Inside / Centroid）
-  - 计算成本-性能权衡分析（well-saving analysis、ROI 估算）
-  - 代码内启动配置（无需命令行参数）
-
-多 trial 方法（Random / LHS）使用 'all_trial_histories' 字段加载所有 trial，
-取 mean ± std 后再参与跨样本统计；单 trial 方法（Look-ahead / Greedy）则直接
-使用 'history' 字段。全局集合 MULTI_TRIAL_METHODS = {'random', 'lhs'}
-统一控制此分支，避免多处硬编码遗漏。
-
 输出文件
 --------
 性能相关：
@@ -22,7 +11,7 @@ evaluate_unified.py
   fig3_scatter_kr2_cr2.png          K_R² vs C_R² 散点图
   summary.txt                       4 方法均值±标准差 + 相对降幅
   phase_analysis.txt                early/mid/late 三阶段斜率分析
-  statistical_tests.txt             Look-ahead vs (Greedy / LHS / Random) Wilcoxon + Cohen's d
+  statistical_tests.txt             AL vs (Greedy / LHS / Random) Wilcoxon + Cohen's d
 
 空间分布：
   spatial_stats.csv                 每样本每方法 6 项空间指标原始数据
@@ -31,10 +20,9 @@ evaluate_unified.py
 成本-性能权衡：
   cost_performance.txt              well-saving analysis、ROI 估算、应用场景边界
 
-直接运行（无需命令行参数）：
+直接运行：
   python evaluate_unified.py
 
-可在文件底部 "代码启动配置区" 修改 INPUT_DIR / METHODS / N_SAMPLES 等。
 """
 
 import os
@@ -477,7 +465,7 @@ def run_statistical_tests(collected, methods=METHODS):
         适用理由：每个样本在相同随机场上同时运行多种策略，数据天然配对。
         Wilcoxon 检验对分布形态无假设（非参数），比配对 t 检验更稳健。
         H₀：两方法性能相同（中位数差 = 0）
-        单侧方向：Look-ahead 优于基线（K_R² / C_R² 更高；C_mean_std 更低）
+        单侧方向：Active 优于基线（K_R² / C_R² 更高；C_mean_std 更低）
 
     Cohen's d（配对差值版本）
         d = mean(diff) / std(diff, ddof=1)
@@ -486,25 +474,25 @@ def run_statistical_tests(collected, methods=METHODS):
 
     返回：
         dict: {
-            'LA_vs_Greedy': {metric: {'n', 'wilcoxon_stat', 'p_one', 'Cohens_d'}},
-            'LA_vs_LHS':    {metric: {...}},
-            'LA_vs_Random': {metric: {...}},
+            'AL_vs_Greedy': {metric: {'n', 'wilcoxon_stat', 'p_one', 'Cohens_d'}},
+            'AL_vs_LHS':    {metric: {...}},
+            'AL_vs_Random': {metric: {...}},
         }
     """
     if 'active' not in methods:
         return {}
 
     metrics = {
-        'K_r2':       'higher',   # Look-ahead 应更高
+        'K_r2':       'higher',   # Active 应更高
         'C_r2':       'higher',
-        'C_mean_std': 'lower',    # Look-ahead 应更低（不确定性更小）
+        'C_mean_std': 'lower',    # Active 应更低（不确定性更小）
     }
 
     # 基线列表：(方法名, 显示标签)
     baselines = [
-        ('greedy', 'LA_vs_Greedy'),
-        ('lhs', 'LA_vs_LHS'),
-        ('random', 'LA_vs_Random'),
+        ('greedy', 'AL_vs_Greedy'),
+        ('lhs', 'AL_vs_LHS'),
+        ('random', 'AL_vs_Random'),
     ]
 
     comparisons = {}
@@ -734,8 +722,8 @@ def write_phase_analysis(phase_stats, curves, out_dir, methods=METHODS):
             if not (np.isnan(al_early) or np.isnan(b_early) or b_early == 0):
                 ratio = al_early / b_early if b_early != 0 else np.nan
                 lines.append(
-                    f"  Look-ahead vs {METHOD_LABELS.get(m,m):<16}: "
-                    f"Look-ahead slope={al_early:+.4f}, baseline slope={b_early:+.4f}"
+                    f"  AL vs {METHOD_LABELS.get(m,m):<16}: "
+                    f"AL slope={al_early:+.4f}, baseline slope={b_early:+.4f}"
                     + (f", ratio={ratio:.2f}x" if not np.isnan(ratio) else ""))
 
     lines.append("=" * 90)
@@ -857,19 +845,19 @@ def write_statistical_tests(test_results, out_dir):
 
     lines = []
     lines.append("=" * 82)
-    lines.append("  Statistical Tests: Look-ahead vs. Baselines")
+    lines.append("  Statistical Tests: Active Learning vs. Baselines")
     lines.append("  Wilcoxon signed-rank test (one-sided, paired) + Cohen's d")
     lines.append("=" * 82)
     lines.append("  Rationale: Each sample uses the same random field for all methods")
     lines.append("  (natural paired structure). Wilcoxon is non-parametric and robust")
-    lines.append("  for small n. One-sided p tests the direction Look-ahead > baseline.")
+    lines.append("  for small n. One-sided p tests the direction Active > baseline.")
     lines.append("-" * 82)
     lines.append(f"  {'Comparison':<22} {'Metric':<26} {'n':>4} "
                  f"{'W stat':>10} {'p (one-sided)':>15} {'Cohens_d':>10} {'Sig.':>6}")
     lines.append("  " + "-" * 78)
 
     for comp_label, metrics in test_results.items():
-        display = comp_label.replace('LA_vs_', 'Look-ahead vs ')
+        display = comp_label.replace('AL_vs_', 'AL vs ')
         first = True
         for metric, res in metrics.items():
             comp_col = display if first else ""
@@ -914,7 +902,7 @@ def write_summary(collected, out_dir, methods=METHODS):
               f"{'C_mean_std mean±std':>{col_w[3]}}")
     sep = "=" * (sum(col_w) + 3)
     lines = [
-        "Look-ahead Well Selection: Multi-Sample Evaluation Summary",
+        "Active Well Selection: Multi-Sample Evaluation Summary",
         sep,
         header,
         "-" * (sum(col_w) + 3),
@@ -942,7 +930,7 @@ def write_summary(collected, out_dir, methods=METHODS):
     # 方法间差值（active vs others）
     if 'active' in methods:
         lines.append("")
-        lines.append("Improvement of Look-ahead over baselines (final C_mean_std):")
+        lines.append("Improvement of Active over baselines (final C_mean_std):")
         act_mask = ~np.isnan(collected['active']['C_mean_std'])
         act_mean = np.mean(collected['active']['C_mean_std'][act_mask])
         for m in methods:
@@ -952,7 +940,7 @@ def write_summary(collected, out_dir, methods=METHODS):
             b_mean = np.mean(collected[m]['C_mean_std'][b_mask])
             if b_mean > 0:
                 imp = (1 - act_mean / b_mean) * 100
-                lines.append(f"  Look-ahead vs {METHOD_LABELS[m]:<18}: "
+                lines.append(f"  Active vs {METHOD_LABELS[m]:<18}: "
                               f"{imp:+.1f}% reduction in C_mean_std")
 
     text = "\n".join(lines)
@@ -1184,15 +1172,15 @@ def _cohens_d_paired(x, y):
 
 
 def run_spatial_tests(spatial_collected, methods=METHODS):
-    """对每项空间指标做 Look-ahead vs 各基线的 Wilcoxon + Cohen's d。"""
+    """对每项空间指标做 Active vs 各基线的 Wilcoxon + Cohen's d。"""
     if 'active' not in methods:
         return {}
 
     # 基线列表：(方法名, 显示标签)
     baselines = [
-        ('greedy', 'LA_vs_Greedy'),
-        ('lhs', 'LA_vs_LHS'),
-        ('random', 'LA_vs_Random'),
+        ('greedy', 'AL_vs_Greedy'),
+        ('lhs', 'AL_vs_LHS'),
+        ('random', 'AL_vs_Random'),
     ]
 
     results = {}
@@ -1280,7 +1268,7 @@ def write_spatial_summary(spatial_collected, spatial_tests, out_dir,
                      f"{'n':>4} {'W':>10} {'p':>14} {'Cohen d':>10} {'Sig':>6}")
         lines.append("  " + "-" * 90)
 
-        comp_order = ['LA_vs_Greedy', 'LA_vs_LHS', 'LA_vs_Random']
+        comp_order = ['AL_vs_Greedy', 'AL_vs_LHS', 'AL_vs_Random']
         for k in SPATIAL_METRIC_KEYS:
             first = True
             for comp in comp_order:
@@ -1289,7 +1277,7 @@ def write_spatial_summary(spatial_collected, spatial_tests, out_dir,
                 r = spatial_tests[comp][k]
                 mk_col   = SPATIAL_METRIC_LABELS[k] if first else ""
                 first    = False
-                comp_lbl = comp.replace('LA_vs_', 'vs ')
+                comp_lbl = comp.replace('AL_vs_', 'vs ')
                 w_str = f"{r['W']:.0f}" if not np.isnan(r['W']) else "N/A"
                 d_str = f"{r['d']:.3f}" if not np.isnan(r['d']) else "N/A"
                 lines.append(
@@ -1426,11 +1414,11 @@ def write_cost_performance_report(collected, curves, out_dir,
 
     # ── 3) 等性能井数节省 ────────────────────────────────────────────────────
     lines.append("")
-    lines.append("  [3] Well-saving analysis: how many wells does Look-ahead need to")
+    lines.append("  [3] Well-saving analysis: how many wells does Active need to")
     lines.append("      reach each baseline's terminal C_mean_std?")
     lines.append("      (log-log interpolation on 100-sample averaged learning curve)")
     lines.append(f"  {'vs Baseline':<22} {'Baseline target':>17} "
-                 f"{'Look-ahead n_wells':>20} {'Wells saved':>14}")
+                 f"{'Active n_wells':>16} {'Wells saved':>14}")
     lines.append("  " + "-" * 76)
 
     wells_saved = {}
@@ -1464,7 +1452,7 @@ def write_cost_performance_report(collected, curves, out_dir,
                 default=0)
             extra_hours = max(extra_min, 0) / 60.0
             extra_gpu_usd = extra_hours * gpu_cost_per_hour
-            lines.append(f"      Look-ahead extra GPU time:         "
+            lines.append(f"      Active extra GPU time:         "
                          f"{extra_min:.1f} min "
                          f"(~${extra_gpu_usd:.2f} at ${gpu_cost_per_hour}/h)")
         else:
@@ -1492,14 +1480,14 @@ def write_cost_performance_report(collected, curves, out_dir,
     # ── 5) 解读 ──────────────────────────────────────────────────────────────
     lines.append("")
     lines.append("  Interpretation:")
-    lines.append("    - Look-ahead sampling carries higher one-time computational cost,")
+    lines.append("    - Active sampling carries higher one-time computational cost,")
     lines.append("      but achieves equivalent C uncertainty with fewer monitoring wells.")
     lines.append("    - In any field-deployment scenario where per-well cost dominates")
-    lines.append("      (typical wells $5K–$50K vs. GPU compute <$10), Look-ahead is")
+    lines.append("      (typical wells $5K–$50K vs. GPU compute <$10), Active is")
     lines.append("      economically rational despite its computational overhead.")
     lines.append("    - For routine large-scale surveys with abundant well budget,")
     lines.append("      LHS offers a cost-effective alternative achieving most of")
-    lines.append("      Look-ahead's uncertainty reduction at <1% of the computational cost.")
+    lines.append("      Active's uncertainty reduction at <1% of the computational cost.")
     lines.append("=" * 88)
 
     text = "\n".join(lines)
@@ -1627,26 +1615,7 @@ def main(input_dir='./test_100_results',
 
 
 # ==========================================
-# 代码启动配置区（直接运行本文件即可）
-# ==========================================
-# 修改以下变量来控制运行行为：
-#
-#   INPUT_DIR    : run_100.py 的输出目录
-#   OUTPUT_DIR   : 评估输出目录（None → <INPUT_DIR>/evaluation/）
-#   N_SAMPLES    : 加载的样本数量
-#   METHODS      : 要参与对比的方法（按列表顺序决定箱线图/图例顺序）
-#                  合法选项 : 'active', 'greedy', 'lhs', 'random'
-#                  注意：lhs 与 random 都是多次试验取均值的非自适应基线
-#                       （NUM_RANDOM_TRIALS = 10），统计口径一致可比。
-#
-#   SKIP_CURVES        : True 跳过学习曲线 + 阶段分析（节省时间）
-#   SKIP_SPATIAL       : True 跳过空间分布统计
-#   SKIP_COST_ANALYSIS : True 跳过成本-性能权衡分析
-#
-#   COST_PER_WELL_LOW/HIGH : 单口监测井成本区间（USD），用于 ROI 估算
-#                            典型值：浅井 $5K，深井/复杂场地 $50K+
-#   GPU_COST_PER_HOUR      : GPU 算力单价（USD/小时），用于计算 Look-ahead 多花的成本
-#                            典型值：云 GPU $0.5–$5/h，本地集群 ~$0
+# 代码启动配置区（直接运行本文件）
 # ==========================================
 if __name__ == "__main__":
     INPUT_DIR    = './test_100_results'
