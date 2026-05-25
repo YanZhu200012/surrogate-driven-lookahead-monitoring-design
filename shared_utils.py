@@ -66,7 +66,7 @@ class BaseConfig:
     N_TIME_STEPS = 5
     TIME_WEIGHTS = [0.1, 0.15, 0.2, 0.25, 0.3]
 
-    # Look-ahead 参数
+    # Look-ahead strategy parameters
     # 虚拟 ES-MDA 膨胀因子（4次均值划分，Σ(1/αᵢ) = 1.0 ✓）
     VIRTUAL_ALPHA_LIST   = [4.0] * 4
     USE_CANDIDATE_FILTER = True
@@ -337,7 +337,7 @@ def run_esmda(vae, fno_kh, z_prior, wells, h_obs, config,
     return K_post, z
 
 
-# ================= Look-ahead 核心函数 =================
+# ================= Look-ahead well-selection functions =================
 def virtual_es_mda_update(z_ensemble, existing_wells, new_well,
                            h_obs_existing, vae, fno_kh, config):
     """
@@ -442,7 +442,7 @@ def compute_weighted_C_variance(C_samples, config):
     ----
     total_var : float
         全域加权总方差 = Σ_{i,j} var_map[i,j]
-        用于 Look-ahead 内部优化（最大化方差下降）
+        用于 Look-ahead 内部优化（最大化预期方差下降）
 
     var_map : ndarray (GRID_SIZE, GRID_SIZE)
         空间方差分布图，用于可视化和候选筛选
