@@ -2,18 +2,6 @@
 figure_plot.py
 批量处理多个样本的可视化 (兼容版) - 已更新期刊风格
 
-兼容两种数据格式:
-1. 单独运行脚本生成的格式 (active_learning_main_c.py / greedy_main_c.py / random_main_c.py)
-2. run_100.py 批量生成的格式
-
-修改说明（新增）：
-  - 完全参考 evaluate_all.py 的 JOURNAL_RC 风格（Arial 字体、字号提升、线宽等）
-  - 统一 apply_journal_style() + SAVE_KW（dpi=300 + bbox_inches='tight'）
-  - 更新 figsize 为更紧凑的期刊尺寸（参考 VAE/FNO 图：宽度 ~14-15）
-  - 更新 suptitle / ax.set_title / ylabel 字号为 JOURNAL_RC 对应值
-  - 更新 colorbar tick 字号 + 子图调整（left=0.05/right=0.92 等）
-  - Fig6 dpi 从 150 → 300，legend fontsize 统一
-  - 修复/优化：所有 savefig 统一使用 SAVE_KW
 """
 
 import os
@@ -25,14 +13,14 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 # ============================================================
 # 期刊图像全局样式（直接参考 evaluate_all.py）
 #
-# v2 修改说明（4 方法版本：Look-ahead / Greedy / LHS / Random（内部数据键仍为 Active / Greedy / LHS / Random））：
+# v2 修改说明（4 方法版本：Active / Greedy / LHS / Random）：
 #   - Config.get_input_paths 新增 'LHS': lhs.npz 数据源
 #   - 新增全局 METHOD_STYLE 映射，统一各方法的颜色 / 标记 / 标签 / 线型
 #   - fig1 / fig2 / fig5 子图布局：n_rows = len(valid_methods)，自适应 4 行
 #   - fig3 学习曲线：插入 LHS 曲线（橙色虚线 + 菱形标记）
 #   - fig4 / fig6 井位散点图与曲线：所有循环遍历 4 方法
-#   - compute_spatial_stats_all_methods：新增 LHS 分支输出 'LHS' 统计
-#   - 颜色约定：Look-ahead=绿、Greedy=蓝、LHS=橙、Random=红（线型上 LHS/Random=虚线）
+#   - compute_spatial_stats_all_methods：新增 LHS 分支输出 'LHS-20' 统计
+#   - 颜色约定：Active=绿、Greedy=蓝、LHS=橙、Random=红（线型上 LHS/Random=虚线）
 # ============================================================
 JOURNAL_RC = {
     'font.family':        'Arial',
@@ -109,12 +97,12 @@ class Config:
 # - linestyle: 折线图线型（LHS 用虚线区分非自适应方法）
 # ============================================================
 METHOD_STYLE = {
-    'Active': {'color': '#2ca02c', 'marker': 'o', 'label': 'Look-ahead',
-               'short_label': 'Look-ahead',  'linestyle': '-'},
+    'Active': {'color': '#2ca02c', 'marker': 'o', 'label': 'Optimal (Lookahead)',
+               'short_label': 'Optimal',  'linestyle': '-'},
     'Greedy': {'color': '#1f77b4', 'marker': '^', 'label': 'Greedy (MaxVar)',
-               'short_label': 'Greedy',   'linestyle': '-'},
-    'LHS':    {'color': '#ff7f0e', 'marker': 'D', 'label': 'LHS',
-               'short_label': 'LHS',   'linestyle': '--'},
+               'short_label': 'MaxVar',   'linestyle': '-'},
+    'LHS':    {'color': '#ff7f0e', 'marker': 'D', 'label': 'LHS-20 (space-filling)',
+               'short_label': 'LHS-20',   'linestyle': '--'},
     'Random': {'color': '#d62728', 'marker': 's', 'label': 'Random',
                'short_label': 'Random',   'linestyle': '--'},
 }
@@ -310,7 +298,7 @@ def compute_spatial_stats(wells, n_init, grid_size=51,
 def compute_spatial_stats_all_methods(data, rand_idx, rand_histories,
                                       n_init, grid_size, prior_C_var=None):
     """
-    对 Look-ahead / Greedy / LHS / Random 四种方法分别调用 compute_spatial_stats()，
+    对 Active / Greedy / LHS / Random 四种方法分别调用 compute_spatial_stats()，
     返回汇总字典。
 
     plume_mask 由 prior_C_var 场的高方差区域（上四分位数）自动生成。
@@ -323,12 +311,12 @@ def compute_spatial_stats_all_methods(data, rand_idx, rand_histories,
 
     all_stats = {}
 
-    # Look-ahead
+    # Active
     if 'Active' in data and 'final_wells' in data['Active']:
         wells = data['Active']['final_wells']
         if hasattr(wells, 'tolist'):
             wells = wells.tolist()
-        all_stats['Look-ahead'] = compute_spatial_stats(
+        all_stats['Optimal'] = compute_spatial_stats(
             wells, n_init, grid_size, plume_mask)
 
     # Greedy
@@ -336,7 +324,7 @@ def compute_spatial_stats_all_methods(data, rand_idx, rand_histories,
         wells = data['Greedy']['final_wells']
         if hasattr(wells, 'tolist'):
             wells = wells.tolist()
-        all_stats['Greedy'] = compute_spatial_stats(
+        all_stats['MaxVar'] = compute_spatial_stats(
             wells, n_init, grid_size, plume_mask)
 
     # LHS
@@ -344,7 +332,7 @@ def compute_spatial_stats_all_methods(data, rand_idx, rand_histories,
         wells = data['LHS']['final_wells']
         if hasattr(wells, 'tolist'):
             wells = wells.tolist()
-        all_stats['LHS'] = compute_spatial_stats(
+        all_stats['LHS-20'] = compute_spatial_stats(
             wells, n_init, grid_size, plume_mask)
 
     # Random（取指定 trial）
@@ -547,7 +535,7 @@ def plot_fig1_k_comparison(data, rand_idx, output_dir, sample_id):
     apply_journal_style()  # 每张图确保风格一致
 
     methods = ['Active', 'Greedy', 'LHS', 'Random']
-    titles  = ['Look-ahead', 'Greedy', 'LHS', f'Random (Trial #{rand_idx})']
+    titles  = ['Optimal', 'MaxVar', 'LHS-20', f'Random (Trial #{rand_idx})']
 
     valid_methods, method_data = [], {}
     k_trues, k_means, k_errors, k_stds = [], [], [], []
@@ -623,7 +611,7 @@ def plot_fig2_c_weighted(data, rand_idx, output_dir, sample_id):
     apply_journal_style()
 
     methods = ['Active', 'Greedy', 'LHS', 'Random']
-    titles  = ['Look-ahead', 'Greedy', 'LHS', f'Random (Trial #{rand_idx})']
+    titles  = ['Optimal', 'MaxVar', 'LHS-20', f'Random (Trial #{rand_idx})']
     weights = Config.C_WEIGHTS
 
     valid_methods, method_data = [], {}
@@ -723,7 +711,7 @@ def plot_fig3_curves(data, rand_histories, output_dir, sample_id):
                 history = history.tolist()
             x = [h['n_wells'] for h in history]
             y = extract_metric(history, metric)
-            ax.plot(x, y, 'g-o', label='Look-ahead', linewidth=2)
+            ax.plot(x, y, 'g-o', label='Optimal (Lookahead)', linewidth=2)
             has_data = True
 
         if 'Greedy' in data and 'history' in data['Greedy']:
@@ -735,7 +723,7 @@ def plot_fig3_curves(data, rand_histories, output_dir, sample_id):
             ax.plot(x, y, 'b-^', label='Greedy (MaxVar)', linewidth=2)
             has_data = True
 
-        # LHS: non-adaptive deterministic baseline (序贯协议下也有完整 history)
+        # LHS-20: non-adaptive deterministic baseline (序贯协议下也有完整 history)
         if 'LHS' in data and 'history' in data['LHS']:
             history = data['LHS']['history']
             if not isinstance(history, list):
@@ -747,7 +735,7 @@ def plot_fig3_curves(data, rand_histories, output_dir, sample_id):
                     color=lhs_style['color'],
                     marker=lhs_style['marker'],
                     linestyle=lhs_style['linestyle'],
-                    label='LHS', linewidth=2)
+                    label='LHS-20 (space-filling)', linewidth=2)
             has_data = True
 
         if rand_histories:
@@ -792,7 +780,7 @@ def _get_background_fields(data, rand_idx):
       C_true_last   : (51, 51)   最后时刻真实浓度羽流
       prior_C_var   : (51, 51)   先验集合浓度方差（加权均值）
 
-    优先顺序：Look-ahead → Greedy → Random(rand_idx trial)
+    优先顺序：Active → Greedy → Random(rand_idx trial)
     """
     K_true       = None
     C_true_last  = None
@@ -838,7 +826,7 @@ def _get_background_fields(data, rand_idx):
                     prior_C_var = np.var(arr_w, axis=0)               # (51, 51)
                 break
 
-    # 退路：若没有先验集合，用 Look-ahead/Greedy 方法的最终后验 C_std 近似
+    # 退路：若没有先验集合，用 Active/Greedy 方法的最终后验 C_std 近似
     if prior_C_var is None:
         for method in ['Active', 'Greedy']:
             if method in data:
@@ -901,7 +889,7 @@ def plot_fig4_wells(data, rand_idx, rand_histories, output_dir, sample_id):
       行 1  叠加真实浓度羽流 C_true (t=最后) (turbo，alpha=0.65)
       行 2  叠加先验浓度方差场 prior C var (YlOrRd，alpha=0.65)
 
-    列：每种方法（Look-ahead / Greedy / LHS / Random）各一列
+    列：每种方法（Optimal / MaxVar / Random）各一列
 
     井位符号：
       ✕ 白色叉号  → 初始 3 口井
@@ -917,7 +905,7 @@ def plot_fig4_wells(data, rand_idx, rand_histories, output_dir, sample_id):
 
     # ── 收集所有方法的井位 ──────────────────────────────────────
     plots = []
-    for method, label in [('Active', 'Look-ahead'), ('Greedy', 'Greedy'), ('LHS', 'LHS')]:
+    for method, label in [('Active', 'Optimal'), ('Greedy', 'MaxVar'), ('LHS', 'LHS-20')]:
         if method in data and 'final_wells' in data[method]:
             wells = data[method]['final_wells']
             if hasattr(wells, 'tolist'):
@@ -966,7 +954,7 @@ def plot_fig4_wells(data, rand_idx, rand_histories, output_dir, sample_id):
     col_titles_annotated = []
     for method_label, wells in plots:
         # 找到对应方法的统计结果
-        # method_label 是 'Look-ahead' / 'Greedy' / 'LHS' / 'Random (Trial #N)'
+        # method_label 是 'Optimal' / 'MaxVar' / 'Random (Trial #N)'
         s = spatial_stats.get(method_label)
         if s is None:
             # 尝试前缀匹配（Random 标签含 Trial 编号）
@@ -1089,7 +1077,7 @@ def _plot_fig4_single_background(data, rand_idx, rand_histories,
     G = Config.GRID_SIZE
 
     plots = []
-    for method, label in [('Active', 'Look-ahead'), ('Greedy', 'Greedy'), ('LHS', 'LHS')]:
+    for method, label in [('Active', 'Optimal'), ('Greedy', 'MaxVar'), ('LHS', 'LHS-20')]:
         if method in data and 'final_wells' in data[method]:
             wells = data[method]['final_wells']
             if hasattr(wells, 'tolist'):
@@ -1183,7 +1171,7 @@ def plot_fig5_c_per_time(data, rand_idx, output_dir, sample_id):
     apply_journal_style()
 
     methods = ['Active', 'Greedy', 'LHS', 'Random']
-    titles  = ['Look-ahead', 'Greedy', 'LHS', f'Random (Trial #{rand_idx})']
+    titles  = ['Optimal', 'MaxVar', 'LHS-20', f'Random (Trial #{rand_idx})']
     n_times = Config.N_TIMES
 
     valid_methods = []
@@ -1314,7 +1302,7 @@ def plot_fig6_summary(data, rand_histories, output_dir, sample_id):
                 h = h.tolist()
             ax.plot(n_wells_base, extract_metric(h, metric),
                     greedy_style, label=greedy_label, linewidth=2)
-        # LHS: 非自适应基线，与 active/greedy 同为 single history
+        # LHS-20: 非自适应基线，与 active/greedy 同为 single history
         if 'LHS' in data and 'history' in data['LHS']:
             h = data['LHS']['history']
             if not isinstance(h, list):
@@ -1339,20 +1327,20 @@ def plot_fig6_summary(data, rand_histories, output_dir, sample_id):
 
     # ── 子图 0: K R² ──
     _plot_metric(axes_flat[0], 'K_r2', 'g-s', 'b-o',
-                 'Look-ahead', 'Greedy (MaxVar)',
+                 'Optimal', 'Greedy (MaxVar)',
                  'Permeability (K) R² Score', 'R²')
     axes_flat[0].legend()
 
     # ── 子图 1: C R² ──
     _plot_metric(axes_flat[1], 'C_r2', 'g-s', 'b-o',
-                 'Look-ahead', 'Greedy',
+                 'Optimal', 'Greedy',
                  'Concentration (C) R² Score', 'R²')
 
     # ── 子图 2: Arrival Time R2（可选）或留空 ──
     next_subplot_idx = 2
     if has_arrival:
         _plot_metric(axes_flat[2], 'arrival_r2', 'g-s', 'b-o',
-                     'Look-ahead', 'Greedy',
+                     'Optimal', 'Greedy',
                      'Arrival Time R² Score', 'R²')
         next_subplot_idx = 3
     else:
@@ -1366,7 +1354,7 @@ def plot_fig6_summary(data, rand_histories, output_dir, sample_id):
         if not isinstance(h, list):
             h = h.tolist()
         ax_var.semilogy(n_wells_base, extract_metric(h, 'C_var'),
-                        'g-s', label='Look-ahead', linewidth=2)
+                        'g-s', label='Optimal', linewidth=2)
     if 'Greedy' in data and 'history' in data['Greedy']:
         h = data['Greedy']['history']
         if not isinstance(h, list):
@@ -1401,7 +1389,7 @@ def plot_fig6_summary(data, rand_histories, output_dir, sample_id):
         h = data['Active']['history']
         if not isinstance(h, list):
             h = h.tolist()
-        bar_methods.append('Look-ahead')
+        bar_methods.append('Optimal')
         bar_vals.append(h[-1].get('C_r2', 0))
         bar_errs.append(0)
         bar_colors.append(METHOD_STYLE['Active']['color'])
@@ -1419,7 +1407,7 @@ def plot_fig6_summary(data, rand_histories, output_dir, sample_id):
         h = data['LHS']['history']
         if not isinstance(h, list):
             h = h.tolist()
-        bar_methods.append('LHS')
+        bar_methods.append('LHS-20')
         bar_vals.append(h[-1].get('C_r2', 0))
         bar_errs.append(0)
         bar_colors.append(METHOD_STYLE['LHS']['color'])
@@ -1465,9 +1453,9 @@ def plot_fig6_summary(data, rand_histories, output_dir, sample_id):
     init_set = {tuple(w) for w in init_wells}
 
     colors_map = {
-        'Active': (METHOD_STYLE['Active']['color'], 'o', 'Look-ahead'),
+        'Active': (METHOD_STYLE['Active']['color'], 'o', 'Optimal'),
         'Greedy': (METHOD_STYLE['Greedy']['color'], '^', 'Greedy'),
-        'LHS':    (METHOD_STYLE['LHS']['color'],    'D', 'LHS'),
+        'LHS':    (METHOD_STYLE['LHS']['color'],    'D', 'LHS-20'),
     }
     for method, (color, marker, label) in colors_map.items():
         if method in data and 'final_wells' in data[method]:
@@ -1553,13 +1541,13 @@ def write_spatial_stats_report(stats_dict, out_dir, sample_id):
                 row += f"{'N/A':>{col_val}}"
         lines.append(row)
 
-    # ── Table 2：相对差异（以 Look-ahead 为基准）─────────────
+    # ── Table 2：相对差异（以 Active/Optimal 为基准）─────────────
     lines.append("")
-    lines.append("Table 2.  Relative difference vs. Look-ahead method  [%]")
-    lines.append("  Positive = baseline HIGHER than Look-ahead (worse clustering = more dispersed)")
+    lines.append("Table 2.  Relative difference vs. Optimal (Active) method  [%]")
+    lines.append("  Positive = baseline HIGHER than Optimal (worse clustering = more dispersed)")
     lines.append("-" * 90)
-    baselines = [m for m in methods if m != 'Look-ahead']
-    if 'Look-ahead' in stats_dict and baselines:
+    baselines = [m for m in methods if m != 'Optimal']
+    if 'Optimal' in stats_dict and baselines:
         hdr2 = f"  {'Metric':<{col_m}}" + "".join(
             f"{m:>{col_val}}" for m in baselines)
         lines.append(hdr2)
@@ -1567,7 +1555,7 @@ def write_spatial_stats_report(stats_dict, out_dir, sample_id):
         for mk in metrics:
             label = metric_info[mk][0]
             row = f"  {label:<{col_m}}"
-            raw = stats_dict['Look-ahead'].get(mk, np.nan)
+            raw = stats_dict['Optimal'].get(mk, np.nan)
             base_val = float(raw) if raw is not None else np.nan
             for m in baselines:
                 cmp_val = stats_dict.get(m, {}).get(mk, np.nan)
@@ -1597,9 +1585,9 @@ def write_spatial_stats_report(stats_dict, out_dir, sample_id):
     lines.append("  Key Findings for Manuscript (Section 4.3.3)")
     lines.append("=" * 90)
 
-    if 'Look-ahead' in stats_dict and 'Greedy' in stats_dict:
-        opt = stats_dict['Look-ahead']
-        grd = stats_dict['Greedy']
+    if 'Optimal' in stats_dict and 'MaxVar' in stats_dict:
+        opt = stats_dict['Optimal']
+        grd = stats_dict['MaxVar']
 
         # Use original field names from compute_spatial_stats()
         ce_opt = float(opt.get('clark_evans',  np.nan) or np.nan)
@@ -1619,53 +1607,53 @@ def write_spatial_stats_report(stats_dict, out_dir, sample_id):
         lines.append("  [Clustering: Clark-Evans Ratio]")
         if not (np.isnan(ce_opt) or np.isnan(ce_grd)):
             lines.append(
-                f"  Look-ahead R={ce_opt:.3f} vs Greedy R={ce_grd:.3f} "
-                f"({'Greedy more clustered' if ce_grd < ce_opt else 'Look-ahead more clustered'})")
+                f"  Optimal R={ce_opt:.3f} vs MaxVar R={ce_grd:.3f} "
+                f"({'Greedy more clustered' if ce_grd < ce_opt else 'Optimal more clustered'})")
             lines.append(
                 f"  Greedy clustering is "
                 f"{abs(ce_opt - ce_grd) / max(ce_opt, 1e-9) * 100:.1f}% "
-                f"{'stronger' if ce_grd < ce_opt else 'weaker'} than Look-ahead")
+                f"{'stronger' if ce_grd < ce_opt else 'weaker'} than Optimal")
 
         lines.append("")
         lines.append("  [Coverage Rate]")
         if not (np.isnan(cv_opt) or np.isnan(cv_grd)):
             pct = (cv_opt - cv_grd) / max(cv_grd, 1e-9) * 100
             lines.append(
-                f"  Look-ahead coverage={cv_opt*100:.1f}% vs Greedy coverage={cv_grd*100:.1f}%")
+                f"  Optimal coverage={cv_opt*100:.1f}% vs MaxVar coverage={cv_grd*100:.1f}%")
             lines.append(
-                f"  Look-ahead covers {pct:+.1f}% more of the study area than Greedy")
+                f"  Optimal covers {pct:+.1f}% more of the study area than MaxVar")
 
         lines.append("")
         lines.append("  [Spread: Average Nearest-Neighbor Distance]")
         if not (np.isnan(mn_opt) or np.isnan(mn_grd)):
             lines.append(
-                f"  Look-ahead ANN={mn_opt:.3f} vs Greedy ANN={mn_grd:.3f} grid units")
+                f"  Optimal ANN={mn_opt:.3f} vs MaxVar ANN={mn_grd:.3f} grid units")
             pct2 = (mn_opt - mn_grd) / max(mn_grd, 1e-9) * 100
             lines.append(
-                f"  Look-ahead inter-well spacing is {pct2:+.1f}% "
-                f"{'larger' if pct2 > 0 else 'smaller'} than Greedy "
+                f"  Optimal inter-well spacing is {pct2:+.1f}% "
+                f"{'larger' if pct2 > 0 else 'smaller'} than MaxVar "
                 f"→ {'more dispersed placement' if pct2 > 0 else 'tighter clustering'}")
 
         lines.append("")
         lines.append("  [Boundary Rate]")
         if not (np.isnan(br_opt) or np.isnan(br_grd)):
             lines.append(
-                f"  Look-ahead boundary_rate={br_opt*100:.1f}% vs Greedy={br_grd*100:.1f}%")
+                f"  Optimal boundary_rate={br_opt*100:.1f}% vs MaxVar={br_grd*100:.1f}%")
 
         if pi_opt is not None and pi_grd is not None:
             lines.append("")
             lines.append("  [Plume Coverage]")
             lines.append(
-                f"  Look-ahead plume_inside={pi_opt*100:.1f}% vs Greedy={pi_grd*100:.1f}%")
+                f"  Optimal plume_inside={pi_opt*100:.1f}% vs MaxVar={pi_grd*100:.1f}%")
             lines.append(
-                f"  → Look-ahead places {(pi_opt - pi_grd)*100:+.1f}% "
+                f"  → Optimal places {(pi_opt - pi_grd)*100:+.1f}% "
                 f"{'more' if pi_opt > pi_grd else 'fewer'} wells inside the high-variance zone")
 
         lines.append("")
         lines.append("  [Centroid Offset (normalised, 0=centre 1=corner)]")
         if not (np.isnan(cd_opt) or np.isnan(cd_grd)):
             lines.append(
-                f"  Look-ahead centroid_dist={cd_opt:.3f} vs Greedy={cd_grd:.3f}")
+                f"  Optimal centroid_dist={cd_opt:.3f} vs MaxVar={cd_grd:.3f}")
 
     lines.append("=" * 90)
 
@@ -1692,9 +1680,9 @@ def plot_spatial_stats_chart(stats_dict, out_dir, sample_id):
     apply_journal_style()
 
     methods  = list(stats_dict.keys())
-    colors   = {'Look-ahead': METHOD_STYLE['Active']['color'],
-                'Greedy':  METHOD_STYLE['Greedy']['color'],
-                'LHS':  METHOD_STYLE['LHS']['color'],
+    colors   = {'Optimal': METHOD_STYLE['Active']['color'],
+                'MaxVar':  METHOD_STYLE['Greedy']['color'],
+                'LHS-20':  METHOD_STYLE['LHS']['color'],
                 'Random':  METHOD_STYLE['Random']['color']}
     # 为 Random (Trial #N) 也映射颜色
     col_map = {}
@@ -1760,14 +1748,14 @@ def generate_report(data, rand_histories, output_dir, sample_id):
 
     with open(path, 'w', encoding='utf-8') as f:
         f.write("=" * 55 + "\n")
-        f.write(f"  Look-ahead Comparison Report - Sample {sample_id}\n")
+        f.write(f"  Active Learning Comparison Report - Sample {sample_id}\n")
         f.write("=" * 55 + "\n\n")
 
         f.write("1. Final Metrics Summary:\n")
         f.write(f"  {'Method':<15} {'K R²':<10} {'C R²':<10} {'C Var':<12}\n")
         f.write("  " + "-" * 48 + "\n")
 
-        for method, label in [('Active', 'Look-ahead'), ('Greedy', 'Greedy'), ('LHS', 'LHS')]:
+        for method, label in [('Active', 'Optimal'), ('Greedy', 'Greedy'), ('LHS', 'LHS-20')]:
             if method in data and 'history' in data[method]:
                 h = data[method]['history']
                 if not isinstance(h, list):
@@ -1783,11 +1771,11 @@ def generate_report(data, rand_histories, output_dir, sample_id):
             _, c_mean, _ = extract_random_metrics(rand_histories, 'C_r2')
             _, v_mean, _ = extract_random_metrics(rand_histories, 'C_var')
             if k_mean is not None:
-                f.write(f"  {'Random (Avg)':<15} {k_mean[-1]:<10.4f} "
+                f.write(f"  {'Random(Avg)':<15} {k_mean[-1]:<10.4f} "
                         f"{c_mean[-1]:<10.4f} {v_mean[-1]:<12.4f}\n")
 
         f.write("\n2. Improvement (Final − Initial C_R²):\n")
-        for method, label in [('Active', 'Look-ahead'), ('Greedy', 'Greedy'), ('LHS', 'LHS')]:
+        for method, label in [('Active', 'Optimal'), ('Greedy', 'Greedy'), ('LHS', 'LHS-20')]:
             if method in data and 'history' in data[method]:
                 h = data[method]['history']
                 if not isinstance(h, list):
@@ -1797,7 +1785,7 @@ def generate_report(data, rand_histories, output_dir, sample_id):
                     f.write(f"  {label} Improvement: +{imp:.4f}\n")
 
         f.write("\n3. Final Well Coordinates (Row, Col) → (X, Y):\n")
-        for method, label in [('Active', 'Look-ahead'), ('Greedy', 'Greedy'), ('LHS', 'LHS')]:
+        for method, label in [('Active', 'Optimal'), ('Greedy', 'Greedy'), ('LHS', 'LHS-20')]:
             if method in data and 'final_wells' in data[method]:
                 fw = data[method]['final_wells']
                 if hasattr(fw, 'tolist'):
