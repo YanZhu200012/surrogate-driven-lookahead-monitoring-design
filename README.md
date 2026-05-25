@@ -1,4 +1,4 @@
-# A-Surrogate-Driven-Progressive-Look-Ahead-Framework
+# Surrogate-Driven Progressive Look-Ahead Framework for Monitoring Well Placement
 This repository provides the code used for the surrogate-model-assisted ES-MDA and Look-ahead monitoring well placement experiments.
 
 
