@@ -2,7 +2,7 @@
 This repository provides the code used for the surrogate-model-assisted ES-MDA and Look-ahead monitoring well placement experiments.
 The internal file name "active" is retained for compatibility with the original result files, but it corresponds to the Look-ahead strategy in the paper.
 
-# 1. Download input data and pretrained model files
+## 1. Download input data and pretrained model files
 
 Download the required files from:
 https://drive.google.com/file/d/1BBjbfqQv13MZeY1xy2t6oOWb2tXCdEUj/view?usp=sharing
