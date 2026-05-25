@@ -10,7 +10,7 @@ https://drive.google.com/file/d/1BBjbfqQv13MZeY1xy2t6oOWb2tXCdEUj/view?usp=shari
 
 After downloading and extracting the files, place them in the corresponding folders as follows:
 
-data/
+  data/
     DataK_6000_51_51.mat
     DataH_6000_5_51_51.mat
     DataC_6000_5_51_51_Original.mat
