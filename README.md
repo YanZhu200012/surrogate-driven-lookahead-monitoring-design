@@ -1,160 +1,115 @@
 # Surrogate-Driven Progressive Look-Ahead Framework for Monitoring Network Design
-This repository provides the code used for the surrogate-model-assisted ES-MDA and Look-ahead monitoring well placement experiments.
 
+Code accompanying our work on surrogate-assisted, look-ahead optimal monitoring
+well placement under ES-MDA data assimilation. The pipeline couples a VAE
+parameterization of the hydraulic conductivity field K with two FNO surrogates
+(K→H, K→C), uses ES-MDA for sequential assimilation, and selects new wells by
+minimizing the expected posterior concentration uncertainty through a virtual
+("look-ahead") assimilation step.
 
-## 1. Download input data and pretrained model files
 
-Download the required files from:
+## 1. Environment
 
-https://drive.google.com/file/d/1BBjbfqQv13MZeY1xy2t6oOWb2tXCdEUj/view?usp=sharing
+    pip install -r requirements.txt
 
-After downloading and extracting the files, place them in the corresponding folders as follows:
+The code requires PyTorch with CUDA; install a torch build that matches the
+local CUDA toolkit before installing the rest.
 
-(1).data/
-    DataK_6000_51_51.mat
-    DataH_6000_5_51_51.mat
-    DataC_6000_5_51_51_Original.mat
 
-(2).data/test/
-    DataK_test_100_51_51.mat
-    DataH_test_100_5_51_51.mat
-    DataC_100_5_51_51_Original.mat
+## 2. Data and pretrained models
 
-(3).test_synthetic_data/
-    synthetic_test_100.npz
+Download the archive and extract it into the repository root:
 
-(4).vae_results/
-    best_vae.pth
+    https://drive.google.com/file/d/1BBjbfqQv13MZeY1xy2t6oOWb2tXCdEUj/view?usp=sharing
 
-(5).fno_kh_results/
-    best_fno_kh.pth
-    normalization_params.npz
+The archive contains two groups of files.
 
-(6).fno_kc_results/
-    best_fno_kc.pth
-    normalization_params.npz
+Datasets — raw training/test fields and the packaged test set:
 
+    data/DataK_6000_51_51.mat
+    data/DataH_6000_5_51_51.mat
+    data/DataC_6000_5_51_51_Original.mat
+    data/test/DataK_test_100_51_51.mat
+    data/test/DataH_test_100_5_51_51.mat
+    data/test/DataC_100_5_51_51_Original.mat
+    test_synthetic_data/synthetic_test_100.npz
 
-## 2. Install required packages
+Pretrained weights — VAE and the two FNO surrogates:
 
-Install the required Python packages using:
+    vae_results/best_vae.pth
+    fno_kh_results/best_fno_kh.pth
+    fno_kh_results/normalization_params.npz
+    fno_kc_results/best_fno_kc.pth
+    fno_kc_results/normalization_params.npz
 
-pip install -r requirements.txt
 
-Please make sure that the PyTorch version is compatible with your local CUDA environment.
+## 3. Train the surrogates and prepare the test set  (skip if using the downloaded files)
 
+    python train_vae.py        # VAE   : K parameterization      -> vae_results/
+    python train_f1.py         # FNO-1 : K -> hydraulic head H   -> fno_kh_results/
+    python train_f2.py         # FNO-2 : K -> concentration C    -> fno_kc_results/
+    python data_synthetic.py   # pack the 100 test cases         -> test_synthetic_data/synthetic_test_100.npz
 
-## 3. Train the surrogate models
+`data_synthetic.py` builds the packaged test set from the raw .mat truths;
+test H and C come from the physical simulator rather than the FNO surrogates
+to avoid inverse crime.
 
-Run the following scripts from the repository root directory:
 
-python train_vae.py
-python train_f1.py
-python train_f2.py
+## 4. Evaluate the surrogates
 
-The outputs will be saved to:
+    python evaluate_surrogate.py
 
-vae_results/
-fno_kh_results/
-fno_kc_results/
+Reports K reconstruction (VAE), H prediction (FNO-1) and C prediction (FNO-2)
+metrics on the 100-sample test set.
 
-If pretrained model files are already downloaded, this step can be skipped.
 
+## 5. Validate ES-MDA in isolation
 
-## 4. Evaluate the surrogate models
+This step isolates the assimilation algorithm from the well-placement
+strategy: for each test case it computes the prior, the posterior after 3 LHS
+wells, and the posterior after 20 LHS wells (all wells drawn by LHS, no
+adaptive selection).
 
-After training or downloading the pretrained models, run:
+    python run_es_mda.py        # -> es_mda_results/sample_XXX.npz
+    python evaluate_es_mda.py   # -> es_mda_results/evaluation/
 
-python evaluate_surrogate.py
 
-This script evaluates the three surrogate models:
+## 6. Main experiment: 100-sample well-placement comparison
 
-VAE: K-field reconstruction
-FNO-1: K to hydraulic head prediction
-FNO-2: K to concentration prediction
+    python run_100.py
 
+Compares four placement strategies — Look-ahead, Greedy, LHS and Random —
+under an identical sequential ES-MDA protocol. Results are written to
+`test_100_results/sample_XXX/{active,greedy,lhs,random}.npz`, where
+`active.npz` corresponds to the Look-ahead strategy. A `progress.json`
+checkpoint supports resuming.
 
-## 5. Validate the ES-MDA assimilation procedure
 
-Run:
+## 7. Evaluate the four strategies
 
-python run_es_mda.py
-python evaluate_es_mda.py
+    python evaluate_unified.py        # -> test_100_results/evaluation/
 
-The first script runs ES-MDA on the test samples.
-The second script evaluates the prior and posterior results.
+Produces the box plots, learning curves, scatter plots, pairwise Wilcoxon
+tests with Cohen's d, spatial-distribution statistics and the
+cost-performance analysis used in the paper.
 
-The outputs will be saved to:
 
-es_mda_results/
+## 8. Optional: saturation analysis
 
+    python saturation_curve.py        # -> saturation_results/
 
-## 6. Run the main 100-sample monitoring well placement experiment
+Sweeps the well count under LHS placement and tracks the ensemble C
+uncertainty, supporting the choice of 20 wells as the saturation point.
 
-Run:
 
-python run_100.py
+## 9. Optional: per-sample visualization
 
-This script compares four monitoring well placement strategies:
+    python run_selected_samples.py    # set SELECTED_SAMPLES at the top of the file
+    python figure_plot.py
 
-Look-ahead
-Greedy
-LHS
-Random
+Generates the full per-sample fields and the paper-style composite figures.
+Outputs go to `test_selected_results/` and `test_100_results/paper_figures_output/`.
 
-The result files will be saved to:
 
-test_100_results/
-
-Note:
-The saved file name active.npz corresponds to the Look-ahead strategy.
-
-
-## 7. Evaluate the four well placement strategies
-
-After running run_100.py, run:
-
-python evaluate_unified.py
-
-This script generates the main performance comparison, statistical tests, spatial distribution analysis, and cost-performance analysis.
-
-The outputs will be saved to:
-
-test_100_results/evaluation/
-
-
-## 8. Optional: saturation curve analysis
-
-To evaluate how concentration uncertainty changes with the number of monitoring wells, run:
-
-python saturation_curve.py
-
-This script is used to support the choice of 20 wells as the target monitoring budget.
-
-The outputs will be saved to:
-
-saturation_results/
-
-
-## 9. Optional: representative sample visualization
-
-To generate full outputs for selected representative samples, run:
-
-python run_selected_samples.py
-
-Then generate paper-style figures by running:
-
-python figure_plot.py
-
-The outputs will be saved to:
-
-test_selected_results/
-test_100_results/paper_figures_output/
-
-
-## 10. Notes
-
-All scripts should be run from the repository root directory.
-
-Generated output folders are not included in this repository. They can be reproduced by running the scripts.
-
+All scripts must be launched from the repository root. Output directories are
+not tracked in the repository; they are recreated by the scripts above.
