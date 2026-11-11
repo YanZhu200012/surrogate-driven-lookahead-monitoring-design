@@ -1,9 +1,9 @@
 """
 train_f1.py
-FNO-1: K → H 训练脚本
-- 修正验证集命名（val_loader）
-- 加入随机种子
-- 保存中间结果（模型权重、归一化参数、history、val_indices）
+FNO-1: K → H（5 次抽水试验的水头场）训练脚本
+- 固定随机种子（SEED = 42），训练/验证按 9:1 划分
+- 保存验证集最优权重、归一化参数、训练历史与验证集索引
+  （val_indices.npy 用于同化阶段在验证集上校准 FNO-1 代理误差 σ_f1）
 - 输出训练损失曲线
 结果保存至 ./fno_kh_results/
 """
@@ -18,7 +18,6 @@ import os
 import time
 import random
 from torch.utils.data import DataLoader, Dataset, random_split
-from sklearn.metrics import r2_score
 
 # ==========================================
 # 0. 随机种子
