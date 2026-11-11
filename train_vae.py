@@ -1,8 +1,10 @@
 """
 train_vae.py
-VAE 训练脚本
-- 修改：去除早停机制，固定 EPOCHS = 100
-- 保留：随机种子、最优保存机制、中间结果保存（history、潜变量统计等）
+VAE 训练脚本（K 场参数化，潜变量维数 128）
+- 固定随机种子（SEED = 42），训练/验证按 9:1 划分
+- 训练 100 个 epoch，保存验证集 MSE 最优的权重
+- 保存训练历史、验证集索引与潜变量统计
+- 输出训练损失曲线
 结果保存至 ./vae_results/
 """
 
@@ -42,7 +44,7 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 DEVICE       = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE   = 32
 LR           = 1e-3
-EPOCHS       = 100  # <--- 已修改为 100
+EPOCHS       = 100
 LATENT_DIM   = 128
 
 
@@ -194,7 +196,7 @@ def loss_function(recon_x, x, mu, logvar, beta=0.0001, gamma=0.1):
 # ==========================================
 def main():
     print("=" * 60)
-    print("  VAE V4 训练 (残差连接 + 梯度损失)")
+    print("  VAE 训练 (残差连接 + 梯度损失)")
     print(f"  Device: {DEVICE} | Seed: {SEED}")
     print("=" * 60)
 
@@ -284,7 +286,7 @@ def main():
                   f"Val R²={val_r2:.4f} | "
                   f"LR={optimizer.param_groups[0]['lr']:.2e}")
 
-        # 最优保存机制（已去除早停判定）
+        # 保存验证集最优模型
         if avg_val_mse < best_val_loss:
             best_val_loss = avg_val_mse
             torch.save(model.state_dict(), best_model_path)
@@ -301,7 +303,7 @@ def main():
              val_r2=history['val_r2'])
     print("训练历史已保存至 history.npz")
 
-    # 计算并保存潜变量统计（供下游任务使用）
+    # 计算并保存潜变量统计（诊断用）
     print("计算全量潜变量统计...")
     model.load_state_dict(torch.load(best_model_path))
     model.eval()
@@ -344,7 +346,7 @@ def main():
     axes[2].set_title('Validation R² over Epochs')
     axes[2].grid(True)
 
-    plt.suptitle(f'VAE V4 Training Curves (Best Val MSE={best_val_loss:.6f})',
+    plt.suptitle(f'VAE Training Curves (Best Val MSE={best_val_loss:.6f})',
                  fontsize=13)
     plt.tight_layout()
     plt.savefig(os.path.join(SAVE_DIR, 'training_curves.png'), dpi=150)
