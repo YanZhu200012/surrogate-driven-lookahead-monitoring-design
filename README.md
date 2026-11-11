@@ -39,6 +39,7 @@ Pretrained weights — VAE and the two FNO surrogates:
     vae_results/best_vae.pth
     fno_kh_results/best_fno_kh.pth
     fno_kh_results/normalization_params.npz
+    fno_kh_results/val_indices.npy
     fno_kc_results/best_fno_kc.pth
     fno_kc_results/normalization_params.npz
 
@@ -104,11 +105,10 @@ uncertainty, supporting the choice of 20 wells as the saturation point.
 
 ## 9. Optional: per-sample visualization
 
-    python run_selected_samples.py    # set SELECTED_SAMPLES at the top of the file
-    python figure_plot.py
+    python sensitivity_K_to_C.py      # K→C sensitivity of the selected well locations
+    python figure_plot.py             # set Config.SAMPLE_IDS at the top of the file
 
-Generates the full per-sample fields and the paper-style composite figures.
-Outputs go to `test_selected_results/` and `test_100_results/paper_figures_output/`.
+Evaluates the K→C sensitivity at the well locations selected by each strategy, and generates the full per-sample fields and the paper-style composite figures. Outputs go to `sensitivity_results/` and `test_100_results/paper_figures_output/`.
 
 
 All scripts must be launched from the repository root. Output directories are
